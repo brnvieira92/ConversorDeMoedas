@@ -1,52 +1,39 @@
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
 import com.google.gson.JsonObject;
-
-import java.io.IOException;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.util.Scanner;
+import modulos.ApiClient;
+import modulos.ConversorDeMoeda;
+import modulos.InterfaceUsuario;
+import modulos.JsonParser;
 
 public class Principal {
-    public static void main(String[] args) throws IOException, InterruptedException {
-        Scanner leitor = new Scanner(System.in);
-        System.out.println("ARS, BOB, BRL, CLP, COP, USD");
-        System.out.println("Digite a moeda desejada: ");
-        String par = leitor.nextLine().toUpperCase();
-        var endereco = "https://v6.exchangerate-api.com/v6/801b5ea2ec19de0890aa54dd/latest/" + par;
+    public static void main(String[] args) {
+        InterfaceUsuario ui = new InterfaceUsuario();
+        ApiClient api = new ApiClient();
+        JsonParser parser = new JsonParser();
+        ConversorDeMoeda conversor = new ConversorDeMoeda();
 
-        HttpClient client = HttpClient.newHttpClient();
+        try {
+            String moedaBase = ui.lerMoedaBase();
+            String json = api.buscarDados(moedaBase);
+            JsonObject taxas = parser.extrairTaxas(json);
 
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(endereco))
-                .build();
+            String[] moedas = {"ARS", "BOB", "BRL", "CLP", "COP", "USD"};
+            ui.mostrarTaxas(moedaBase, moedas, taxas);
 
-        HttpResponse<String> response = client.send(request,HttpResponse.BodyHandlers.ofString());
+            while (true) {
+                double valor = ui.lerValor();
+                if (valor == 0) break;
 
-        System.out.println(response.body());
-
-        Gson gson = new GsonBuilder().setPrettyPrinting().create();
-        JsonObject json = gson.fromJson(response.body(), JsonObject.class);
-        System.out.println(json);
-
-        JsonObject rates = json.getAsJsonObject("conversion_rates");
-        double brl = rates.get("BRL").getAsDouble();
-        double ars = rates.get("BOB").getAsDouble();
-        double clp = rates.get("CLP").getAsDouble();
-        double cop = rates.get("COP").getAsDouble();
-        double usd = rates.get("USD").getAsDouble();
-        double bob = rates.get("BOB").getAsDouble();
-
-        String[] moedas = {"ARS", "BOB", "BRL", "CLP", "COP", "USD"};
-
-        System.out.println("Taxas em relação a " + par + ":");
-        for (String moeda : moedas) {
-            if (rates.has(moeda)) {
-                double valor = rates.get(moeda).getAsDouble();
-                System.out.println(moeda + ": " + valor);
+                String destino = ui.lerMoedaDestino();
+                if (taxas.has(destino)) {
+                    double convertido = conversor.converter(valor, destino, taxas);
+                    ui.mostrarResultado(valor, moedaBase, convertido, destino);
+                } else {
+                    ui.mostrarErro("Moeda não encontrada.");
+                }
             }
+
+        } catch (Exception e) {
+            ui.mostrarErro("Falha na execução: " + e.getMessage());
         }
     }
 }
